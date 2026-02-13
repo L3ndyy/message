@@ -98,7 +98,7 @@ io.on('connection', (socket) => {
       reply_to_id ?? null
     );
     const msgId = r.lastInsertRowid;
-    const row = db.prepare('SELECT id, chat_id, sender_id, body_encrypted, body_plain, attachment_name, attachment_path, attachment_mime, attachment_size, created_at, reply_to_id FROM messages WHERE id = ?').get(msgId);
+    const row = db.prepare('SELECT id, chat_id, sender_id, body_encrypted, body_plain, attachment_name, attachment_path, attachment_mime, attachment_size, created_at, reply_to_id, topic_id FROM messages WHERE id = ?').get(msgId);
     const sender = db.prepare('SELECT username, display_name FROM users WHERE id = ?').get(socket.userId);
 
     let textOut = row.body_plain;
@@ -116,6 +116,7 @@ io.on('connection', (socket) => {
       chat_id: row.chat_id,
       sender_id: row.sender_id,
       text: textOut,
+      topic_id: row.topic_id ?? null,
       reply_to_id: row.reply_to_id || null,
       edited_at: null,
       attachment: row.attachment_path ? { name: row.attachment_name, path: row.attachment_path, mime: row.attachment_mime, size: row.attachment_size } : null,

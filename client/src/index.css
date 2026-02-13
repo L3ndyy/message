@@ -66,20 +66,21 @@ a:hover {
 }
 
 /* ——— Адаптив: планшеты и телефоны ——— */
-/* Минимальный размер зоны нажатия для тача (рекомендация ~44px) */
+/* Крупные зоны нажатия для тача (мелкие кнопки-иконки исключены) */
 @media (pointer: coarse) {
-  button,
+  button:not(.icon-btn):not(.msg-action),
   a[href],
   input[type="submit"],
   [role="button"] {
     min-height: 44px;
     min-width: 44px;
   }
-  input:not([type="submit"]),
+  input:not([type="submit"]):not(.no-min-h),
   textarea {
     min-height: 44px;
   }
 }
+.icon-btn, .msg-action { min-height: 0 !important; min-width: 0 !important; }
 
 /* Брейкпоинт: мобильный — только один экран (список или чат) */
 @media (max-width: 767px) {
@@ -100,6 +101,12 @@ a:hover {
   }
   .messenger-placeholder {
     padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+  }
+  .chat-row-wrap {
+    padding: 4px 0;
+  }
+  .chat-item-btn {
+    padding: 14px 16px !important;
   }
 }
 
@@ -141,8 +148,24 @@ a:hover {
   }
 }
 
-/* Горизонтальная прокрутка тем в чате на малых экранах */
 .topic-bar-scroll {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
+}
+
+/* Улучшение читаемости и отступов */
+.msg-bubble {
+  border-radius: 16px;
+  padding: 10px 14px;
+  max-width: 85%;
+  word-wrap: break-word;
+}
+.msg-bubble-own {
+  border-bottom-right-radius: 4px;
+}
+.msg-bubble-other {
+  border-bottom-left-radius: 4px;
+}
+@media (max-width: 767px) {
+  .msg-bubble { max-width: 90%; }
 }

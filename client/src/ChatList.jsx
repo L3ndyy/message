@@ -175,9 +175,10 @@ export default function ChatList({ chats, selectedId, onSelect, onNewChat, onPin
           <li style={styles.muted}>Нет чатов. Создайте новый.</li>
         ) : (
           chats.map((chat) => (
-            <li key={chat.id} style={styles.chatRowWrap}>
+            <li key={chat.id} style={styles.chatRowWrap} className="chat-row-wrap">
               <button
                 type="button"
+                className="chat-item-btn"
                 onClick={() => onSelect(chat.id)}
                 style={{
                   ...styles.chatItem,
@@ -197,10 +198,10 @@ export default function ChatList({ chats, selectedId, onSelect, onNewChat, onPin
                 </div>
               </button>
               <div style={styles.chatActions}>
-                <button type="button" onClick={(e) => handlePin(e, chat)} style={styles.iconBtn} title={chat.pinned_at ? 'Открепить' : 'Закрепить'}>
+                <button type="button" className="icon-btn" onClick={(e) => handlePin(e, chat)} style={styles.iconBtn} title={chat.pinned_at ? 'Открепить' : 'Закрепить'}>
                   {chat.pinned_at ? '📌' : '📍'}
                 </button>
-                <button type="button" onClick={(e) => handleArchive(e, chat)} style={styles.iconBtn} title="В архив">
+                <button type="button" className="icon-btn" onClick={(e) => handleArchive(e, chat)} style={styles.iconBtn} title="В архив">
                   📥
                 </button>
               </div>

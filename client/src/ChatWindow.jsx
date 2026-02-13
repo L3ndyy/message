@@ -36,10 +36,14 @@ export default function ChatWindow({ chatId, chatType, currentUser, onMessage, o
     setAttachment(null);
     setReplyTo(null);
     getMessages(chatId, selectedTopicId).then(setMessages);
-    if (socket) {
-      socket.emit('chat:join', chatId);
-      return () => socket.emit('chat:leave', chatId);
-    }
+    if (!socket) return;
+    const joinRoom = () => socket.emit('chat:join', chatId);
+    joinRoom();
+    socket.on('connect', joinRoom);
+    return () => {
+      socket.off('connect', joinRoom);
+      socket.emit('chat:leave', chatId);
+    };
   }, [chatId, selectedTopicId, socket]);
 
   useEffect(() => {
@@ -54,15 +58,20 @@ export default function ChatWindow({ chatId, chatType, currentUser, onMessage, o
   useEffect(() => {
     if (!socket) return;
     const onNew = (msg) => {
-      if (msg.chat_id === chatId && ((selectedTopicId && msg.topic_id === selectedTopicId) || (!selectedTopicId && !msg.topic_id))) {
-        setMessages((prev) => [...prev, msg]);
-        onMessage(chatId, msg);
-        if (msg.sender_id !== currentUser.id) {
-          playBeep();
-          if (document.hidden && Notification.permission === 'granted') {
-            new Notification('Новое сообщение', { body: (msg.sender_display_name || msg.sender_username) + ': ' + (msg.text || '[файл]').slice(0, 50) });
+      if (msg.chat_id !== chatId) return;
+      const msgTopic = msg.topic_id ?? null;
+      const currentTopic = selectedTopicId ?? null;
+      if (msgTopic !== currentTopic) return;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      onMessage(chatId, msg);
+      if (msg.sender_id !== currentUser.id) {
+        playBeep();
+        if (document.hidden && Notification.permission === 'granted') {
+          new Notification('Новое сообщение', { body: (msg.sender_display_name || msg.sender_username) + ': ' + (msg.text || '[файл]').slice(0, 50) });
           }
-        }
       }
     };
     const onTyping = (data) => {
@@ -136,8 +145,7 @@ export default function ChatWindow({ chatId, chatType, currentUser, onMessage, o
       (res) => {
         setSending(false);
         if (res?.error) alert(res.error);
-        if (res?.ok && res.message) {
-          setMessages((prev) => [...prev, res.message]);
+        if (res?.ok) {
           setInput('');
           setReplyTo(null);
         }
@@ -212,15 +220,15 @@ export default function ChatWindow({ chatId, chatType, currentUser, onMessage, o
         <span style={styles.headerTitle}>Чат</span>
         {typingUser && <span style={styles.typing}>{typingUser} печатает...</span>}
         <span style={styles.encrypted}>🔒</span>
-        <button type="button" onClick={handleExport} style={styles.iconBtn} title="Экспорт">📄</button>
+        <button type="button" className="icon-btn" onClick={handleExport} style={styles.iconBtn} title="Экспорт">📄</button>
         {chatType === 'group' && (
-          <button type="button" onClick={handleCreateInvite} style={styles.iconBtn} title="Пригласить">🔗</button>
+          <button type="button" className="icon-btn" onClick={handleCreateInvite} style={styles.iconBtn} title="Пригласить">🔗</button>
         )}
       </div>
       {inviteLink && (
         <div style={styles.inviteBar}>
           <span style={styles.inviteText}>{inviteLink}</span>
-          <button type="button" onClick={() => setInviteLink('')}>×</button>
+          <button type="button" className="icon-btn" onClick={() => setInviteLink('')} style={styles.removeAttach}>×</button>
         </div>
       )}
 
@@ -262,7 +270,7 @@ export default function ChatWindow({ chatId, chatType, currentUser, onMessage, o
               ...(msg.sender_id === currentUser.id ? styles.msgOwn : {}),
             }}
           >
-            <div style={{ ...styles.msgBubble, ...(msg.sender_id === currentUser.id ? styles.msgOwnBubble : {}) }}>
+            <div className={`msg-bubble ${msg.sender_id === currentUser.id ? 'msg-bubble-own' : 'msg-bubble-other'}`} style={{ ...styles.msgBubble, ...(msg.sender_id === currentUser.id ? styles.msgOwnBubble : styles.msgOtherBubble) }}>
               {msg.reply_to && (
                 <div style={styles.replyQuote}>
                   <span style={styles.replyName}>{msg.reply_to.sender_name}</span>
@@ -290,9 +298,9 @@ export default function ChatWindow({ chatId, chatType, currentUser, onMessage, o
                 <span style={styles.msgTime}>{formatTime(msg.created_at)}{msg.edited_at ? ' (ред.)' : ''}</span>
                 {msg.sender_id === currentUser.id && (
                   <>
-                    <button type="button" onClick={() => setReplyTo(msg)} style={styles.msgActionBtn} title="Ответить">↩</button>
-                    <button type="button" onClick={() => { const t = prompt('Новый текст', msg.text); if (t != null) editMessage(msg.id, t).then(() => setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, text: t, edited_at: Date.now() / 1000 } : m)))); }} style={styles.msgActionBtn} title="Изменить">✎</button>
-                    <button type="button" onClick={() => { if (confirm('Удалить?')) deleteMessage(msg.id).then(() => setMessages((prev) => prev.filter((m) => m.id !== msg.id))); }} style={styles.msgActionBtn} title="Удалить">🗑</button>
+                    <button type="button" className="msg-action icon-btn" onClick={() => setReplyTo(msg)} style={styles.msgActionBtn} title="Ответить">↩</button>
+                    <button type="button" className="msg-action icon-btn" onClick={() => { const t = prompt('Новый текст', msg.text); if (t != null) editMessage(msg.id, t).then(() => setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, text: t, edited_at: Date.now() / 1000 } : m)))); }} style={styles.msgActionBtn} title="Изменить">✎</button>
+                    <button type="button" className="msg-action icon-btn" onClick={() => { if (confirm('Удалить?')) deleteMessage(msg.id).then(() => setMessages((prev) => prev.filter((m) => m.id !== msg.id))); }} style={styles.msgActionBtn} title="Удалить">🗑</button>
                   </>
                 )}
               </div>
@@ -305,13 +313,13 @@ export default function ChatWindow({ chatId, chatType, currentUser, onMessage, o
         {replyTo && (
           <div style={styles.replyPreview}>
             <span>Ответ на: {(replyTo.text || replyTo.sender_display_name || 'сообщение').slice(0, 40)}</span>
-            <button type="button" onClick={() => setReplyTo(null)} style={styles.removeAttach}>×</button>
+            <button type="button" className="icon-btn" onClick={() => setReplyTo(null)} style={styles.removeAttach}>×</button>
           </div>
         )}
         {attachment && (
           <div style={styles.attachPreview}>
             <span>📎 {attachment.name}</span>
-            <button type="button" onClick={() => setAttachment(null)} style={styles.removeAttach}>
+            <button type="button" className="icon-btn" onClick={() => setAttachment(null)} style={styles.removeAttach}>
               ×
             </button>
           </div>
@@ -423,13 +431,14 @@ const styles = {
   msgWrap: { display: 'flex', justifyContent: 'flex-start' },
   msgOwn: { justifyContent: 'flex-end' },
   msgBubble: {
-    maxWidth: '75%',
+    maxWidth: '85%',
     padding: '10px 14px',
-    borderRadius: 'var(--radius)',
+    borderRadius: 16,
     background: 'var(--tg-surface)',
     border: '1px solid var(--tg-border)',
   },
-  msgOwnBubble: { background: 'var(--tg-accent)', borderColor: 'var(--tg-accent)' },
+  msgOwnBubble: { background: 'var(--tg-accent)', borderColor: 'var(--tg-accent)', borderBottomRightRadius: 4 },
+  msgOtherBubble: { borderBottomLeftRadius: 4 },
   msgSender: { fontSize: 12, color: 'var(--tg-accent)', display: 'block', marginBottom: 4 },
   msgText: { margin: '0 0 4px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' },
   attachment: { marginBottom: 6 },

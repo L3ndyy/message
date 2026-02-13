@@ -41,10 +41,14 @@ try {
 }
 
 const isId = /^\d+$/.test(arg);
-const where = isId ? 'id = ?' : 'username = ?';
-const value = isId ? parseInt(arg, 10) : arg.trim().toLowerCase();
-
-const row = db.prepare(`SELECT id, username, display_name FROM users WHERE ${where}`).get(value);
+let row;
+if (isId) {
+  row = db.prepare('SELECT id, username, display_name FROM users WHERE id = ?').get(parseInt(arg, 10));
+} else {
+  const login = arg.trim().toLowerCase();
+  row = db.prepare('SELECT id, username, display_name FROM users WHERE LOWER(username) = ?').get(login);
+  if (!row) row = db.prepare('SELECT id, username, display_name FROM users WHERE username = ?').get(arg.trim());
+}
 if (!row) {
   console.error('Пользователь не найден:', arg);
   process.exit(1);
