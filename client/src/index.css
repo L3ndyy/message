@@ -1,0 +1,55 @@
+:root {
+  --tg-bg: #0e0e12;
+  --tg-panel: #16161c;
+  --tg-surface: #1c1c24;
+  --tg-border: #2a2a34;
+  --tg-text: #e8e8ed;
+  --tg-text-muted: #8a8a9a;
+  --tg-accent: #5b7cff;
+  --tg-accent-hover: #6d8aff;
+  --tg-green: #3dd68c;
+  --tg-red: #ff5c5c;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Manrope', -apple-system, sans-serif;
+  background: var(--tg-bg);
+  color: var(--tg-text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+input, button, textarea {
+  font-family: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: var(--tg-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
