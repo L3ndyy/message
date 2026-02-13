@@ -13,13 +13,27 @@ function getHeaders() {
   return h;
 }
 
+async function parseJson(res) {
+  const text = await res.text();
+  if (text.trimStart().startsWith('<')) {
+    throw new Error(
+      'Сервер не отвечает. Если открываешь сайт на GitHub Pages — задеплой бэкенд на Render и добавь секрет VITE_API_URL в репо, затем заново запусти деплой (Actions → Run workflow).'
+    );
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('Сервер вернул неверный ответ. Проверь, что бэкенд запущен.');
+  }
+}
+
 export async function register(username, password, display_name) {
   const res = await fetch(`${API}/auth/register`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({ username, password, display_name: display_name || username }),
   });
-  const data = await res.json();
+  const data = await parseJson(res);
   if (!res.ok) throw new Error(data.error || 'Ошибка регистрации');
   return data;
 }
@@ -30,7 +44,7 @@ export async function login(username, password) {
     headers: getHeaders(),
     body: JSON.stringify({ username, password }),
   });
-  const data = await res.json();
+  const data = await parseJson(res);
   if (!res.ok) throw new Error(data.error || 'Ошибка входа');
   return data;
 }
@@ -38,19 +52,19 @@ export async function login(username, password) {
 export async function getMe() {
   const res = await fetch(`${API}/me`, { headers: getHeaders() });
   if (!res.ok) return null;
-  return res.json();
+  return parseJson(res);
 }
 
 export async function getUsers() {
   const res = await fetch(`${API}/users`, { headers: getHeaders() });
   if (!res.ok) throw new Error('Не удалось загрузить пользователей');
-  return res.json();
+  return parseJson(res);
 }
 
 export async function getChats() {
   const res = await fetch(`${API}/chats`, { headers: getHeaders() });
   if (!res.ok) throw new Error('Не удалось загрузить чаты');
-  return res.json();
+  return parseJson(res);
 }
 
 export async function createDirectChat(user_id) {
@@ -59,7 +73,7 @@ export async function createDirectChat(user_id) {
     headers: getHeaders(),
     body: JSON.stringify({ user_id }),
   });
-  const data = await res.json();
+  const data = await parseJson(res);
   if (!res.ok) throw new Error(data.error || 'Ошибка создания чата');
   return data;
 }
@@ -70,7 +84,7 @@ export async function createGroupChat(name, member_ids) {
     headers: getHeaders(),
     body: JSON.stringify({ name, member_ids }),
   });
-  const data = await res.json();
+  const data = await parseJson(res);
   if (!res.ok) throw new Error(data.error || 'Ошибка создания беседы');
   return data;
 }
@@ -79,13 +93,13 @@ export async function getMessages(chatId, topicId) {
   const path = topicId ? `?topic_id=${topicId}` : '';
   const res = await fetch(`${API}/chats/${chatId}/messages${path}`, { headers: getHeaders() });
   if (!res.ok) throw new Error('Не удалось загрузить сообщения');
-  return res.json();
+  return parseJson(res);
 }
 
 export async function getTopics(chatId) {
   const res = await fetch(`${API}/chats/${chatId}/topics`, { headers: getHeaders() });
   if (!res.ok) throw new Error('Не удалось загрузить темы');
-  return res.json();
+  return parseJson(res);
 }
 
 export async function createTopic(chatId, title) {
@@ -94,7 +108,7 @@ export async function createTopic(chatId, title) {
     headers: getHeaders(),
     body: JSON.stringify({ title }),
   });
-  const data = await res.json();
+  const data = await parseJson(res);
   if (!res.ok) throw new Error(data.error || 'Не удалось создать тему');
   return data;
 }
@@ -107,7 +121,7 @@ export async function uploadFile(file) {
     headers: { Authorization: `Bearer ${getToken()}` },
     body: form,
   });
-  const data = await res.json();
+  const data = await parseJson(res);
   if (!res.ok) throw new Error(data.error || 'Ошибка загрузки');
   return data;
 }
