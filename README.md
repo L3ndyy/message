@@ -26,15 +26,82 @@
 
 ### Шаг 3 (важно): Подключить бэкенд
 
-Без бэкенда на Pages будет только интерфейс: логин/чаты не заработают, пока API не доступен.
+Без бэкенда на Pages будет только интерфейс: логин/чаты не заработают, пока API не доступен. Нужно поднять сервер на Render и «склеить» его с фронтом через секрет в GitHub.
 
-1. Задеплой сервер (папка `server`) на [Render](https://render.com) → New → Web Service, подключаешь репо, корень — папка `server`, команда: `npm install && npm start`, в Environment добавь `JWT_SECRET` и `CRYPTO_SECRET`.
-2. В репо на GitHub: **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
-   - **Name:** `VITE_API_URL`
-   - **Value:** `https://твой-сервис.onrender.com` (без слэша в конце)
-3. Запусти workflow заново: **Actions** → **Deploy to GitHub Pages** → **Run workflow**, чтобы сборка прошла уже с этим URL.
+---
 
-После этого сайт **https://l3ndyy.github.io/message/** будет ходить за данными на твой бэкенд на Render.
+#### 3.1. Зарегистрироваться на Render
+
+1. Открой в браузере: **[https://render.com](https://render.com)**.
+2. Нажми **Get Started** (или **Sign Up**).
+3. Войди через **GitHub** — так Render сразу увидит твои репозитории.
+
+---
+
+#### 3.2. Создать Web Service (сервер)
+
+1. В личном кабинете Render нажми **New +** → **Web Service**.
+2. В списке репозиториев выбери **L3ndyy/message** (если не видно — нажми **Configure account** и дай доступ к этому репо).
+3. Нажми **Connect** рядом с репо **message**.
+
+Дальше заполни форму так:
+
+| Поле | Что вписать |
+|------|------------------|
+| **Name** | Любое имя, например `message-api` (по нему будет URL: `message-api.onrender.com`). |
+| **Region** | Оставь по умолчанию (например Frankfurt). |
+| **Branch** | `main` (или `master`, если у тебя такая ветка). |
+| **Root Directory** | **Важно:** впиши **`server`** — так Render будет считать корнем проекта папку `server` из репо. |
+| **Runtime** | **Node**. |
+| **Build Command** | `npm install` (или оставь пустым — Render сам поставит зависимости). |
+| **Start Command** | `npm start` (обязательно). |
+
+4. Раскрой блок **Advanced** (или **Environment**).
+5. В **Environment Variables** добавь две переменные (кнопка **Add Environment Variable**):
+
+   - **Key:** `JWT_SECRET`  
+     **Value:** придумай длинную случайную строку, например `moya-taynaya-stroka-dlya-jwt-32-simvola-minimum`.  
+   - **Key:** `CRYPTO_SECRET`  
+     **Value:** другую длинную строку, например `drugaya-taynaya-stroka-dlya-shifra-32-simv`.  
+
+   Оба значения лучше сделать длинными (от 32 символов) и не светить их нигде публично.
+
+6. Нажми **Create Web Service**. Render начнёт собирать и запускать сервер (первый раз может занять 2–5 минут).
+
+7. Когда деплой станет зелёным, вверху страницы появится **URL сервиса**, например:  
+   **https://message-api.onrender.com**  
+   Скопируй этот URL (без слэша в конце) — он понадобится в следующем шаге.
+
+---
+
+#### 3.3. Сказать фронту на GitHub, куда стучаться (секрет VITE_API_URL)
+
+Фронт на GitHub Pages должен знать адрес твоего API. Это задаётся через секрет репозитория.
+
+1. Открой репозиторий: **https://github.com/L3ndyy/message**.
+2. Вкладка **Settings** (настройки репо).
+3. Слева в меню: **Secrets and variables** → **Actions**.
+4. Нажми **New repository secret**.
+5. Заполни:
+   - **Name:** ровно так: `VITE_API_URL` (большими буквами, без пробелов).
+   - **Value:** URL твоего сервиса с Render, **без слэша в конце**, например:  
+     `https://message-api.onrender.com`
+6. Нажми **Add secret**.
+
+Теперь при следующей сборке фронта GitHub подставит этот URL в код, и сайт будет обращаться к твоему бэкенду на Render.
+
+---
+
+#### 3.4. Пересобрать фронт с новым URL
+
+Секрет подставляется только при сборке. Нужно один раз заново запустить деплой:
+
+1. В том же репо открой вкладку **Actions**.
+2. Слева выбери workflow **Deploy to GitHub Pages**.
+3. Справа нажми **Run workflow** → выбери ветку **main** (или **master**) → **Run workflow**.
+4. Дождись, пока запуск станет зелёным (обычно 1–2 минуты).
+
+После этого сайт **https://l3ndyy.github.io/message/** будет отправлять запросы и WebSocket на твой сервер на Render — логин, чаты и сообщения заработают.
 
 ---
 
