@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { getUsers, createDirectChat, createGroupChat } from './api';
+import { getUsers, createDirectChat, createGroupChat, pinChat, archiveChat } from './api';
 
-export default function ChatList({ chats, selectedId, onSelect, onNewChat, loading }) {
+export default function ChatList({ chats, selectedId, onSelect, onNewChat, onPinArchive, loading }) {
   const [showNew, setShowNew] = useState(false);
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -64,6 +64,27 @@ export default function ChatList({ chats, selectedId, onSelect, onNewChat, loadi
       setShowNew(false);
     } catch (e) {
       alert(e.message || 'Ошибка создания беседы');
+    }
+  };
+
+  const handlePin = async (e, chat) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await pinChat(chat.id, !chat.pinned_at);
+      onPinArchive?.();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+  const handleArchive = async (e, chat) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await archiveChat(chat.id, true);
+      onPinArchive?.();
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -154,7 +175,7 @@ export default function ChatList({ chats, selectedId, onSelect, onNewChat, loadi
           <li style={styles.muted}>Нет чатов. Создайте новый.</li>
         ) : (
           chats.map((chat) => (
-            <li key={chat.id}>
+            <li key={chat.id} style={styles.chatRowWrap}>
               <button
                 type="button"
                 onClick={() => onSelect(chat.id)}
@@ -175,6 +196,14 @@ export default function ChatList({ chats, selectedId, onSelect, onNewChat, loadi
                   <span style={styles.chatPreview}>{chat.last_message || 'Нет сообщений'}</span>
                 </div>
               </button>
+              <div style={styles.chatActions}>
+                <button type="button" onClick={(e) => handlePin(e, chat)} style={styles.iconBtn} title={chat.pinned_at ? 'Открепить' : 'Закрепить'}>
+                  {chat.pinned_at ? '📌' : '📍'}
+                </button>
+                <button type="button" onClick={(e) => handleArchive(e, chat)} style={styles.iconBtn} title="В архив">
+                  📥
+                </button>
+              </div>
             </li>
           ))
         )}
@@ -196,8 +225,11 @@ const styles = {
     fontSize: 14,
   },
   list: { listStyle: 'none', margin: 0, padding: 0, overflow: 'auto', flex: 1 },
+  chatRowWrap: { display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--tg-border)' },
+  chatActions: { display: 'flex', gap: 4, paddingRight: 8 },
+  iconBtn: { padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14 },
   chatItem: {
-    width: '100%',
+    flex: 1,
     display: 'flex',
     alignItems: 'center',
     gap: 12,

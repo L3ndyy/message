@@ -61,8 +61,9 @@ export async function getUsers() {
   return parseJson(res);
 }
 
-export async function getChats() {
-  const res = await fetch(`${API}/chats`, { headers: getHeaders() });
+export async function getChats(archived = false) {
+  const q = archived ? '?archived=1' : '';
+  const res = await fetch(`${API}/chats${q}`, { headers: getHeaders() });
   if (!res.ok) throw new Error('Не удалось загрузить чаты');
   return parseJson(res);
 }
@@ -89,9 +90,14 @@ export async function createGroupChat(name, member_ids) {
   return data;
 }
 
-export async function getMessages(chatId, topicId) {
-  const path = topicId ? `?topic_id=${topicId}` : '';
-  const res = await fetch(`${API}/chats/${chatId}/messages${path}`, { headers: getHeaders() });
+export async function getMessages(chatId, topicId, opts = {}) {
+  const params = new URLSearchParams();
+  if (topicId) params.set('topic_id', topicId);
+  if (opts.limit) params.set('limit', opts.limit);
+  if (opts.before_id) params.set('before_id', opts.before_id);
+  if (opts.q) params.set('q', opts.q);
+  const qs = params.toString();
+  const res = await fetch(`${API}/chats/${chatId}/messages${qs ? '?' + qs : ''}`, { headers: getHeaders() });
   if (!res.ok) throw new Error('Не удалось загрузить сообщения');
   return parseJson(res);
 }
@@ -130,6 +136,72 @@ export function fileUrl(path) {
   if (!path) return '';
   const uploadsBase = BASE ? `${BASE.replace(/\/$/, '')}/uploads` : '';
   return uploadsBase ? `${uploadsBase}/${path}` : `/uploads/${path}`;
+}
+
+export async function pinChat(chatId, pin) {
+  const res = await fetch(`${API}/chats/${chatId}/pin`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ pin }) });
+  if (!res.ok) throw new Error((await parseJson(res).catch(() => ({}))).error || 'Ошибка');
+  return parseJson(res);
+}
+export async function archiveChat(chatId, archive) {
+  const res = await fetch(`${API}/chats/${chatId}/archive`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ archive }) });
+  if (!res.ok) throw new Error((await parseJson(res).catch(() => ({}))).error || 'Ошибка');
+  return parseJson(res);
+}
+export async function editMessage(messageId, text) {
+  const res = await fetch(`${API}/messages/${messageId}`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ text }) });
+  if (!res.ok) throw new Error((await parseJson(res).catch(() => ({}))).error || 'Ошибка');
+  return parseJson(res);
+}
+export async function deleteMessage(messageId) {
+  const res = await fetch(`${API}/messages/${messageId}`, { method: 'DELETE', headers: getHeaders() });
+  if (!res.ok) throw new Error((await parseJson(res).catch(() => ({}))).error || 'Ошибка');
+  return parseJson(res);
+}
+export async function markRead(chatId, messageIds) {
+  const res = await fetch(`${API}/chats/${chatId}/read`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ message_ids: messageIds }) });
+  if (!res.ok) return;
+  return parseJson(res);
+}
+export async function createInvite(chatId, opts = {}) {
+  const res = await fetch(`${API}/chats/${chatId}/invite`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(opts) });
+  if (!res.ok) throw new Error((await parseJson(res).catch(() => ({}))).error || 'Ошибка');
+  return parseJson(res);
+}
+export async function joinInvite(token) {
+  const res = await fetch(`${API}/chats/join/${token}`, { method: 'POST', headers: getHeaders() });
+  if (!res.ok) throw new Error((await parseJson(res).catch(() => ({}))).error || 'Ошибка');
+  return parseJson(res);
+}
+export async function reportMessage(messageId, reason) {
+  const res = await fetch(`${API}/messages/${messageId}/report`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ reason }) });
+  if (!res.ok) throw new Error((await parseJson(res).catch(() => ({}))).error || 'Ошибка');
+  return parseJson(res);
+}
+export async function getAdminUsers() {
+  const res = await fetch(`${API}/admin/users`, { headers: getHeaders() });
+  if (!res.ok) throw new Error('Доступ запрещён');
+  return parseJson(res);
+}
+export async function setSuperadmin(userId, superadmin) {
+  const res = await fetch(`${API}/admin/users/${userId}/superadmin`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ superadmin }) });
+  if (!res.ok) throw new Error((await parseJson(res).catch(() => ({}))).error || 'Ошибка');
+  return parseJson(res);
+}
+export async function getAdminChats() {
+  const res = await fetch(`${API}/admin/chats`, { headers: getHeaders() });
+  if (!res.ok) throw new Error('Доступ запрещён');
+  return parseJson(res);
+}
+export async function getAdminReports() {
+  const res = await fetch(`${API}/admin/reports`, { headers: getHeaders() });
+  if (!res.ok) throw new Error('Доступ запрещён');
+  return parseJson(res);
+}
+export async function exportChat(chatId) {
+  const res = await fetch(`${API}/chats/${chatId}/export`, { headers: getHeaders() });
+  if (!res.ok) throw new Error('Не удалось экспортировать');
+  return res.text();
 }
 
 export { getToken };

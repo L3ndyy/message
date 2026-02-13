@@ -23,8 +23,8 @@ export default function Login({ onLogin, onSwitch }) {
   };
 
   return (
-    <div style={styles.wrap}>
-      <div style={styles.card}>
+    <div style={styles.wrap} className="auth-wrap">
+      <div style={styles.card} className="auth-card">
         <h1 style={styles.title}>Вход</h1>
         <p style={styles.subtitle}>Мессенджер с шифрованием</p>
         <form onSubmit={handleSubmit} style={styles.form}>

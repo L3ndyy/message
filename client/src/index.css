@@ -14,6 +14,17 @@
   --shadow: 0 4px 24px rgba(0,0,0,0.4);
 }
 
+[data-theme="light"] {
+  --tg-bg: #f0f0f4;
+  --tg-panel: #fff;
+  --tg-surface: #e8e8ec;
+  --tg-border: #d0d0d8;
+  --tg-text: #1a1a24;
+  --tg-text-muted: #6a6a7a;
+  --tg-accent: #4a6cf7;
+  --tg-accent-hover: #3d5dd9;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -52,4 +63,86 @@ a:hover {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* ——— Адаптив: планшеты и телефоны ——— */
+/* Минимальный размер зоны нажатия для тача (рекомендация ~44px) */
+@media (pointer: coarse) {
+  button,
+  a[href],
+  input[type="submit"],
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  input:not([type="submit"]),
+  textarea {
+    min-height: 44px;
+  }
+}
+
+/* Брейкпоинт: мобильный — только один экран (список или чат) */
+@media (max-width: 767px) {
+  .messenger-layout .sidebar {
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+  }
+  .messenger-layout .main {
+    width: 100%;
+    min-width: 100%;
+  }
+  .messenger-layout .sidebar.mobile-hidden {
+    display: none !important;
+  }
+  .messenger-layout .main.mobile-hidden {
+    display: none !important;
+  }
+  .messenger-placeholder {
+    padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+  }
+}
+
+/* Планшеты: узкая боковая панель */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .messenger-layout .sidebar {
+    width: 260px;
+    min-width: 260px;
+  }
+}
+
+/* Безопасные зоны (вырезы, индикатор жестов на iPhone) */
+.messenger-chat-footer,
+.chat-footer-safe {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+.messenger-header,
+.chat-header-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.messenger-sidebar-header {
+  padding-left: max(16px, env(safe-area-inset-left));
+}
+.messenger-chat-input-row input {
+  padding-left: max(16px, env(safe-area-inset-left));
+}
+
+/* Логин/регистрация на всю ширину на маленьких экранах */
+@media (max-width: 480px) {
+  .auth-wrap {
+    padding: 12px;
+    align-items: flex-start;
+    padding-top: max(16px, env(safe-area-inset-top));
+  }
+  .auth-card {
+    max-width: none;
+    width: 100%;
+    padding: 24px 20px;
+  }
+}
+
+/* Горизонтальная прокрутка тем в чате на малых экранах */
+.topic-bar-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }

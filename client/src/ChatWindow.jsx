@@ -1,22 +1,40 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getMessages, uploadFile, fileUrl, getTopics, createTopic } from './api';
+import { getMessages, uploadFile, fileUrl, getTopics, createTopic, editMessage, deleteMessage, exportChat, createInvite } from './api';
 import { getSocket, connectSocket } from './socket';
 
-export default function ChatWindow({ chatId, currentUser, onMessage, onChatsRefresh }) {
+const BEEP = 'data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YUvvT18=';
+const playBeep = () => {
+  try {
+    const a = new Audio(BEEP);
+    a.volume = 0.3;
+    a.play().catch(() => {});
+  } catch (_) {}
+};
+
+export default function ChatWindow({ chatId, chatType, currentUser, onMessage, onChatsRefresh, onBack }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [attachment, setAttachment] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
-   const [topics, setTopics] = useState([]);
-   const [selectedTopicId, setSelectedTopicId] = useState(null); // null = общий чат
-   const [loadingTopics, setLoadingTopics] = useState(false);
+  const [topics, setTopics] = useState([]);
+  const [selectedTopicId, setSelectedTopicId] = useState(null);
+  const [loadingTopics, setLoadingTopics] = useState(false);
+  const [replyTo, setReplyTo] = useState(null);
+  const [typingUser, setTypingUser] = useState(null);
+  const [inviteLink, setInviteLink] = useState('');
   const listRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
   const socket = getSocket() || connectSocket();
+
+  useEffect(() => {
+    if (Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+  }, []);
 
   useEffect(() => {
     setMessages([]);
     setAttachment(null);
+    setReplyTo(null);
     getMessages(chatId, selectedTopicId).then(setMessages);
     if (socket) {
       socket.emit('chat:join', chatId);
@@ -39,11 +57,37 @@ export default function ChatWindow({ chatId, currentUser, onMessage, onChatsRefr
       if (msg.chat_id === chatId && ((selectedTopicId && msg.topic_id === selectedTopicId) || (!selectedTopicId && !msg.topic_id))) {
         setMessages((prev) => [...prev, msg]);
         onMessage(chatId, msg);
+        if (msg.sender_id !== currentUser.id) {
+          playBeep();
+          if (document.hidden && Notification.permission === 'granted') {
+            new Notification('Новое сообщение', { body: (msg.sender_display_name || msg.sender_username) + ': ' + (msg.text || '[файл]').slice(0, 50) });
+          }
+        }
       }
     };
+    const onTyping = (data) => {
+      if (data.chat_id !== chatId || data.user_id === currentUser.id) return;
+      setTypingUser(data.username);
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => setTypingUser(null), 3000);
+    };
+    const onUpdated = (data) => {
+      if (data.id) setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, text: data.text, edited_at: data.edited_at } : m)));
+    };
+    const onDeleted = (data) => {
+      if (data.id) setMessages((prev) => prev.filter((m) => m.id !== data.id));
+    };
     socket.on('message:new', onNew);
-    return () => socket.off('message:new', onNew);
-  }, [chatId, socket, onMessage]);
+    socket.on('typing', onTyping);
+    socket.on('message:updated', onUpdated);
+    socket.on('message:deleted', onDeleted);
+    return () => {
+      socket.off('message:new', onNew);
+      socket.off('typing', onTyping);
+      socket.off('message:updated', onUpdated);
+      socket.off('message:deleted', onDeleted);
+    };
+  }, [chatId, socket, onMessage, currentUser.id]);
 
   useEffect(() => {
     listRef.current?.scrollTo(0, listRef.current.scrollHeight);
@@ -87,6 +131,7 @@ export default function ChatWindow({ chatId, currentUser, onMessage, onChatsRefr
         text: text || undefined,
         attachment: att || undefined,
         topic_id: selectedTopicId || undefined,
+        reply_to_id: replyTo?.id || undefined,
       },
       (res) => {
         setSending(false);
@@ -94,12 +139,46 @@ export default function ChatWindow({ chatId, currentUser, onMessage, onChatsRefr
         if (res?.ok && res.message) {
           setMessages((prev) => [...prev, res.message]);
           setInput('');
+          setReplyTo(null);
         }
       }
     );
     if (!socket) {
       setSending(false);
       setInput('');
+      setReplyTo(null);
+    }
+  };
+
+  const onInputChange = (e) => {
+    setInput(e.target.value);
+    if (socket) {
+      socket.emit('typing', { chat_id: chatId });
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const text = await exportChat(chatId);
+      const blob = new Blob([text], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `chat-${chatId}.txt`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      alert(e.message || 'Ошибка экспорта');
+    }
+  };
+
+  const handleCreateInvite = async () => {
+    try {
+      const { invite_path, token } = await createInvite(chatId);
+      const full = window.location.origin + (window.location.pathname || '') + (invite_path || `/join/${token}`);
+      setInviteLink(full);
+      if (navigator.clipboard) navigator.clipboard.writeText(full).then(() => alert('Ссылка скопирована'));
+    } catch (e) {
+      alert(e.message || 'Ошибка');
     }
   };
 
@@ -124,12 +203,28 @@ export default function ChatWindow({ chatId, currentUser, onMessage, onChatsRefr
 
   return (
     <div style={styles.wrap}>
-      <div style={styles.header}>
+      <div style={styles.header} className="messenger-header chat-header-safe">
+        {onBack && (
+          <button type="button" onClick={onBack} style={styles.backBtn} aria-label="Назад к чатам">
+            ←
+          </button>
+        )}
         <span style={styles.headerTitle}>Чат</span>
-        <span style={styles.encrypted}>🔒 Шифрование включено</span>
+        {typingUser && <span style={styles.typing}>{typingUser} печатает...</span>}
+        <span style={styles.encrypted}>🔒</span>
+        <button type="button" onClick={handleExport} style={styles.iconBtn} title="Экспорт">📄</button>
+        {chatType === 'group' && (
+          <button type="button" onClick={handleCreateInvite} style={styles.iconBtn} title="Пригласить">🔗</button>
+        )}
       </div>
+      {inviteLink && (
+        <div style={styles.inviteBar}>
+          <span style={styles.inviteText}>{inviteLink}</span>
+          <button type="button" onClick={() => setInviteLink('')}>×</button>
+        </div>
+      )}
 
-      <div style={styles.topicBar}>
+      <div style={styles.topicBar} className="topic-bar-scroll">
         <button
           type="button"
           onClick={() => setSelectedTopicId(null)}
@@ -168,6 +263,12 @@ export default function ChatWindow({ chatId, currentUser, onMessage, onChatsRefr
             }}
           >
             <div style={{ ...styles.msgBubble, ...(msg.sender_id === currentUser.id ? styles.msgOwnBubble : {}) }}>
+              {msg.reply_to && (
+                <div style={styles.replyQuote}>
+                  <span style={styles.replyName}>{msg.reply_to.sender_name}</span>
+                  <span style={styles.replyText}>{msg.reply_to.text?.slice(0, 80) || '…'}</span>
+                </div>
+              )}
               {msg.sender_id !== currentUser.id && (
                 <span style={styles.msgSender}>{msg.sender_display_name || msg.sender_username}</span>
               )}
@@ -185,13 +286,28 @@ export default function ChatWindow({ chatId, currentUser, onMessage, onChatsRefr
                 </div>
               )}
               {msg.text && <p style={styles.msgText}>{msg.text}</p>}
-              <span style={styles.msgTime}>{formatTime(msg.created_at)}</span>
+              <div style={styles.msgMeta}>
+                <span style={styles.msgTime}>{formatTime(msg.created_at)}{msg.edited_at ? ' (ред.)' : ''}</span>
+                {msg.sender_id === currentUser.id && (
+                  <>
+                    <button type="button" onClick={() => setReplyTo(msg)} style={styles.msgActionBtn} title="Ответить">↩</button>
+                    <button type="button" onClick={() => { const t = prompt('Новый текст', msg.text); if (t != null) editMessage(msg.id, t).then(() => setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, text: t, edited_at: Date.now() / 1000 } : m)))); }} style={styles.msgActionBtn} title="Изменить">✎</button>
+                    <button type="button" onClick={() => { if (confirm('Удалить?')) deleteMessage(msg.id).then(() => setMessages((prev) => prev.filter((m) => m.id !== msg.id))); }} style={styles.msgActionBtn} title="Удалить">🗑</button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div style={styles.footer}>
+      <div style={styles.footer} className="messenger-chat-footer chat-footer-safe">
+        {replyTo && (
+          <div style={styles.replyPreview}>
+            <span>Ответ на: {(replyTo.text || replyTo.sender_display_name || 'сообщение').slice(0, 40)}</span>
+            <button type="button" onClick={() => setReplyTo(null)} style={styles.removeAttach}>×</button>
+          </div>
+        )}
         {attachment && (
           <div style={styles.attachPreview}>
             <span>📎 {attachment.name}</span>
@@ -200,7 +316,7 @@ export default function ChatWindow({ chatId, currentUser, onMessage, onChatsRefr
             </button>
           </div>
         )}
-        <div style={styles.inputRow}>
+        <div style={styles.inputRow} className="messenger-chat-input-row">
           <label style={styles.fileLabel}>
             <input type="file" onChange={handleFileChange} style={{ display: 'none' }} />
             📎
@@ -209,7 +325,7 @@ export default function ChatWindow({ chatId, currentUser, onMessage, onChatsRefr
             type="text"
             placeholder="Сообщение..."
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={onInputChange}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
             style={styles.input}
             disabled={uploading || sending}
@@ -231,14 +347,38 @@ export default function ChatWindow({ chatId, currentUser, onMessage, onChatsRefr
 const styles = {
   wrap: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 },
   header: {
-    padding: '12px 20px',
+    padding: '12px 16px 12px 20px',
     borderBottom: '1px solid var(--tg-border)',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
   },
-  headerTitle: { fontWeight: 600, fontSize: 16 },
+  backBtn: {
+    flexShrink: 0,
+    width: 40,
+    height: 40,
+    borderRadius: 'var(--radius-sm)',
+    border: '1px solid var(--tg-border)',
+    background: 'var(--tg-surface)',
+    color: 'var(--tg-text)',
+    fontSize: 20,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+  },
+  headerTitle: { fontWeight: 600, fontSize: 16, flex: 1 },
+  typing: { fontSize: 12, color: 'var(--tg-text-muted)', fontStyle: 'italic' },
   encrypted: { fontSize: 12, color: 'var(--tg-green)' },
+  iconBtn: { padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 16 },
+  inviteBar: { padding: '8px 12px', background: 'var(--tg-surface)', borderBottom: '1px solid var(--tg-border)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 },
+  inviteText: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  replyQuote: { marginBottom: 6, paddingLeft: 8, borderLeft: '3px solid var(--tg-accent)', fontSize: 12, color: 'var(--tg-text-muted)' },
+  replyName: { display: 'block', fontWeight: 600, color: 'var(--tg-accent)' },
+  replyText: { display: 'block' },
+  replyPreview: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', marginBottom: 8, background: 'var(--tg-surface)', borderRadius: 8, fontSize: 14 },
+  msgMeta: { display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 },
+  msgActionBtn: { padding: 2, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, opacity: 0.7 },
   topicBar: {
     display: 'flex',
     alignItems: 'center',

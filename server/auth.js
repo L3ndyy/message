@@ -31,7 +31,7 @@ export function register(username, password, displayName) {
 }
 
 export function login(username, password) {
-  const row = db.prepare('SELECT id, username, password_hash, display_name FROM users WHERE username = ?').get(username.toLowerCase().trim());
+  const row = db.prepare('SELECT id, username, password_hash, display_name, is_superadmin FROM users WHERE username = ?').get(username.toLowerCase().trim());
   if (!row) {
     throw new Error('User not found');
   }
@@ -49,6 +49,7 @@ export function login(username, password) {
       id: row.id,
       username: row.username,
       display_name: row.display_name || row.username,
+      is_superadmin: !!row.is_superadmin,
     },
   };
 }

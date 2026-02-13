@@ -22,6 +22,7 @@ const io = new Server(httpServer, {
 app.use(cors());
 app.use(express.json());
 
+app.set('io', io);
 app.use('/api', routes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -57,8 +58,13 @@ io.on('connection', (socket) => {
     socket.leave(`chat:${chatId}`);
   });
 
+  socket.on('typing', (data) => {
+    const { chat_id } = data || {};
+    if (chat_id) socket.to(`chat:${chat_id}`).emit('typing', { chat_id, user_id: socket.userId, username: socket.username });
+  });
+
   socket.on('message:send', (data, callback) => {
-    const { chat_id, text, attachment, topic_id } = data || {};
+    const { chat_id, text, attachment, topic_id, reply_to_id } = data || {};
     if (!chat_id) return callback?.({ error: 'chat_id required' });
 
     const member = db.prepare('SELECT 1 FROM chat_members WHERE chat_id = ? AND user_id = ?').get(chat_id, socket.userId);
@@ -76,8 +82,8 @@ io.on('connection', (socket) => {
     }
 
     const stmt = db.prepare(`
-      INSERT INTO messages (chat_id, sender_id, body_encrypted, body_plain, attachment_name, attachment_path, attachment_mime, attachment_size, topic_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO messages (chat_id, sender_id, body_encrypted, body_plain, attachment_name, attachment_path, attachment_mime, attachment_size, topic_id, reply_to_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const r = stmt.run(
       chat_id,
@@ -88,10 +94,11 @@ io.on('connection', (socket) => {
       attachment?.path || null,
       attachment?.mime || null,
       attachment?.size ?? null,
-      topic_id ?? null
+      topic_id ?? null,
+      reply_to_id ?? null
     );
     const msgId = r.lastInsertRowid;
-    const row = db.prepare('SELECT id, chat_id, sender_id, body_encrypted, body_plain, attachment_name, attachment_path, attachment_mime, attachment_size, created_at FROM messages WHERE id = ?').get(msgId);
+    const row = db.prepare('SELECT id, chat_id, sender_id, body_encrypted, body_plain, attachment_name, attachment_path, attachment_mime, attachment_size, created_at, reply_to_id FROM messages WHERE id = ?').get(msgId);
     const sender = db.prepare('SELECT username, display_name FROM users WHERE id = ?').get(socket.userId);
 
     let textOut = row.body_plain;
@@ -109,6 +116,8 @@ io.on('connection', (socket) => {
       chat_id: row.chat_id,
       sender_id: row.sender_id,
       text: textOut,
+      reply_to_id: row.reply_to_id || null,
+      edited_at: null,
       attachment: row.attachment_path ? { name: row.attachment_name, path: row.attachment_path, mime: row.attachment_mime, size: row.attachment_size } : null,
       created_at: row.created_at,
       sender_username: sender?.username,
@@ -117,6 +126,15 @@ io.on('connection', (socket) => {
 
     io.to(`chat:${chat_id}`).emit('message:new', message);
     callback?.({ ok: true, message });
+  });
+
+  socket.on('read', (data) => {
+    const { chat_id, message_ids } = data || {};
+    if (!chat_id || !Array.isArray(message_ids) || !message_ids.length) return;
+    const read_at = Math.floor(Date.now() / 1000);
+    const insert = db.prepare('INSERT OR REPLACE INTO message_reads (message_id, user_id, read_at) VALUES (?, ?, ?)');
+    message_ids.forEach((mid) => { try { insert.run(mid, socket.userId, read_at); } catch (_) {} });
+    socket.to(`chat:${chat_id}`).emit('read', { user_id: socket.userId, message_ids, read_at });
   });
 
   socket.on('disconnect', () => {

@@ -24,8 +24,8 @@ export default function Register({ onRegister, onSwitch }) {
   };
 
   return (
-    <div style={styles.wrap}>
-      <div style={styles.card}>
+    <div style={styles.wrap} className="auth-wrap">
+      <div style={styles.card} className="auth-card">
         <h1 style={styles.title}>Регистрация</h1>
         <p style={styles.subtitle}>Создайте аккаунт для общения</p>
         <form onSubmit={handleSubmit} style={styles.form}>
